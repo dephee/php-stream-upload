@@ -1,0 +1,18 @@
+.btn-upload {
+    position: relative;
+}
+
+.btn-upload input[type="file"] {
+    direction: ltr;
+    margin: 0px;
+    top: 0px;
+    right: 0px;
+    opacity: 0;
+    position: absolute;
+    cursor: pointer;
+}
+
+.btn-upload form {
+    padding: 0px;
+    margin: 0px;
+}
