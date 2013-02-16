@@ -16,3 +16,20 @@
     padding: 0px;
     margin: 0px;
 }
+
+.upload-preview {
+    height: 100px;
+    overflow: hidden;
+    width: auto;
+}
+
+.upload-preview img {
+    max-width: 100px;
+    float: left;
+}
+
+.upload-preview .progress {
+    float: left;
+    width: 200px;
+    margin-left: 10px;
+}
