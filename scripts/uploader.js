@@ -42,6 +42,7 @@
                 _parent.append(theField);
             }
             
+            
             initEvent();
         }
         
@@ -61,8 +62,11 @@
                 };
                 
                 
-                var file = this.files[0];
-                _send(file);
+                if (data.files.length) {
+                    for (i in data.files) {
+                        _send(data.files[i]);
+                    }
+                }
             });
         }
         
@@ -76,7 +80,17 @@
                 'Content-Type': 'application/octet-stream'
             };
                 
+            
+            var params = options.listeners ? options.listeners(file) : {};
+            params.headers = headers;
+            params.url = options.url;
+            
+            _sendChunked(file, params);
+        }
+        
+        function _sendFull(file, xhrOptions) {
             var reader = new FileReader();
+            
             if (file.webkitSlice) {
          
                 var blob = file.webkitSlice(0, file.size);
@@ -86,29 +100,165 @@
                 var blob = file.slice(0, file.size);
             }
             
-            reader.readAsBinaryString(blob);
+            
             reader.onloadend  = function(evt)  {
                 // create XHR instance
                 var xhr = new XMLHttpRequest();
 
                 // send the file through POST
-                xhr.open("PUT", options.url, true);
+                xhr.open("PUT", xhrOptions.url, true);
                     
-                for (var i in headers) {
-                    xhr.setRequestHeader(i, headers[i]);
+                for (var i in xhrOptions.headers) {
+                    xhr.setRequestHeader(i, xhrOptions.headers[i]);
                 }
+                
+                // let's track upload progress
+                var eventSource = xhr.upload || xhr;
+                var dfd = $.Deferred();
+                dfd.then(options.onSuccess, options.onError, xhrOptions.onProgress)
+                dfd.always(options.onComplete);
+                
+                eventSource.addEventListener("progress", function(ev) {
+                    
+                    dfd.notify(xhr, ev);
+                // here you should write your own code how you wish to proces this
+                });
+
+                // state change observer - we need to know when and if the file was successfully uploaded
+                
+                xhr.onreadystatechange = function(e) {
+                    if(xhr.readyState == 4){
+                        if(xhr.status == 200) {
+                            //onSuccess.call(xhr, e);
+                            dfd.resolve( xhr, e);
+                        } else {
+                            dfd.reject(xhr, e);
+                        }
+                    }
+                };
                 xhr.sendAsBinary(evt.target.result);
-            /*
-                    var jqXHR = $.ajax({
-                        form: $this.theForm, 
-                        url: options.url, 
-                        type: 'PUT', 
-                        headers: headers, 
-                        contentType: 'application/octet-stream', 
-                        data: evt.target.result
-                    }); */
+                blob = null;
             }
+            reader.readAsBinaryString(blob); 
+           
         }
+        
+        function getXhr(url, param) {
+            var dfd = $.Deferred();
+            var success = param.onSuccess || function() {}
+            var fail = param.onFail || function() {}
+            var progress = param.onProgress || function() {}
+            var complete = param.onComplete || function() {}
+            
+            dfd.then(success, fail, progress)
+            dfd.always(complete);
+                
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function(e) {
+                if(xhr.readyState == 4){
+                    if(xhr.status == 200) {
+                        dfd.resolveWith(e, [xhr.responseText]);
+                    } else {
+                        dfd.rejectWith(e, [xhr.reponseText]);
+                    }
+                }
+            }
+            var eventSource = xhr.upload || xhr;
+
+            
+            eventSource.addEventListener("progress", function(ev) {
+
+                dfd.notify(xhr, ev);
+            // here you should write your own code how you wish to proces this
+            });
+            
+            xhr.open(param.method || 'GET', url , true);
+                    
+            for (var i in param.headers) {
+                xhr.setRequestHeader(i, param.headers[i]);
+            }
+
+            if (param.binary) {
+                var reader = new FileReader();    
+                reader.onloadend  = function(evt)  {
+                    // send the file through POST
+                    xhr.sendAsBinary(evt.target.result);
+                    param.data = null;
+                }
+                reader.readAsBinaryString(param.data); 
+                
+            } else {
+                xhr.send();
+            }
+            
+            return dfd;
+        }
+        
+        function _sendChunked(file, xhrOptions) {
+            var ub = xhrOptions.uploadedByte = xhrOptions.uploadedByte || 0;
+            var n = Math.ceil((file.size - ub)/options.chunkSize),
+            mcs = options.chunkSize;
+            var slice = file.webkitSlice || file.mozSlice || file.slice
+
+            var dfd = $.Deferred();
+            
+            var upload = function(i) {
+                if (!i) {
+                    return dfd;
+                }
+                
+                return upload(i - 1).then(function() {
+                    var start = ub + (i-1) * mcs,
+                        end = ub + i * mcs;
+                    var blob = slice.call(file, start, end);
+                    xhrOptions.headers['X-File-Start'] = start;
+                    xhrOptions.headers['X-File-End'] = end;
+                    
+                    var xhr = getXhr(options.url, {
+                        binary: true,
+                        data: blob,
+                        headers: xhrOptions.headers,
+                        method: 'PUT' ,
+                        onSuccess: function(data) {
+                            if (typeof data == 'string') {
+                                data = $.parseJSON(data);
+                            }
+                            if (data.filename) {
+                                xhrOptions.headers['X-File-Target'] = data.filename;
+                            }
+                        },
+                        onProgress: function(xhr, ev) {
+                            if (xhrOptions.onProgress) {
+                                xhrOptions.onProgress(xhr, $.Event('progress', {
+                                    lengthComputable: true,
+                                    loaded: xhrOptions.uploadedByte + ev.loaded,
+                                    total: file.size,
+                                    totalSize: file.size,
+                                    position: xhrOptions.uploadedByte + ev.position
+                                }));
+                            }
+                            
+                        },
+                        onComplete: function(xhr, ev) {
+                            xhrOptions.uploadedByte += mcs;
+                        }
+                    }) || dfd;
+                    
+                    
+                    return xhr;
+                });
+            }
+            
+            var xhr = upload(n);
+            
+            xhr.then(xhrOptions.onSuccess, xhrOptions.onError)
+            xhr.always(xhrOptions.onComplete);
+            
+            
+            dfd.resolve();
+        }
+        
+        
         
         function printout() {
             console.log(options.selectable);
@@ -130,7 +280,9 @@
         fileId: null,
         fieldName: 'file',
         multiple: true,
-        url: ''
+        url: '',
+        chunkSize: 1000000,
+        listeners: null
     }
     
     /* These are methods that can be called by $(selector).uploader(mothodname); */

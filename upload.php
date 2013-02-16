@@ -22,7 +22,7 @@ if (isset($headers['X-File-Start']) and $headers['X-File-Start'] == 0) {
     
 } else if (isset($headers['X-File-Target']) and $headers['X-File-Target']) {
     $fileName = $headers['X-File-Target'];
-    $fileHandler = fopen($path . '/' . $headers['X-File-Target']);
+    $fileHandler = fopen($path . '/' . $headers['X-File-Target'], "a+");
 }
 
 $mime = isset($headers['X-File-Type']) ? $headers['X-File-Type'] : 'application/octet-stream';
@@ -30,6 +30,8 @@ $mime = isset($headers['X-File-Type']) ? $headers['X-File-Type'] : 'application/
 $data['filename'] = $fileName;
 if (isset($headers['X-File-End']) and isset($headers['X-File-Size']) and ($headers['X-File-End'] < $headers['X-File-Size'])) {
     $data['next'] = $headers['X-File-End'];
+} else if ($headers['X-File-End'] > $headers['X-File-Size']) {
+    $data['url'] = 'upload/' . $fileName;
 }
 
 // save data from the input stream

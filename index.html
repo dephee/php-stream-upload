@@ -10,12 +10,14 @@
     <body>
         <div>TODO write content</div>
         <div id="upload-button" class="btn"><i class="icon-upload"></i> Upload</div>
+        <div id="upload-list"></div>
         <script type="text/javascript" src="scripts/jquery-1.8.2.min.js"></script>
         <script type="text/javascript" src="scripts/uploader.js"></script>
+        <script type="text/javascript" src="scripts/uploader-ui.js"></script>
         <script type="textjavascript" src="bootstrap/js/bootstrap.min.js"></script>
         
         <script type="text/javascript">
-            $('#upload-button').uploader({url: 'upload.php'});
+            $('#upload-button').uploaderui({url: 'upload.php'});
         </script>
     </body>
 </html>
