@@ -38,6 +38,7 @@
             }
 
             preview.find('.bar').css('width', '100%');
+            preview.find('img').attr('src', data.url);
         }
         
         function getOnSuccess(fileId, file) {
